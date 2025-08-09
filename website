@@ -1,0 +1,1915 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+
+// ====== WiFi Credentials ======
+const char *ssid = "Nothing Phone (2a)_1938";
+const char *password = "99990000";
+
+// ====== Web Server Object ======
+WebServer server(80);
+
+// ====== LED Pin ======
+const int led = 13;
+
+// ====== Ultra Cool Root Page ======
+void handleRoot() {
+  digitalWrite(led, HIGH);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>🚀 MAVERICKS NEXUS - ESP32 Command Center</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Exo 2', sans-serif;
+          background: #000;
+          min-height: 100vh;
+          overflow-x: hidden;
+          cursor: none;
+        }
+        
+        /* Custom Cursor */
+        .cursor {
+          position: fixed;
+          width: 20px;
+          height: 20px;
+          background: radial-gradient(circle, #00ff41, #ff0080);
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 9999;
+          mix-blend-mode: difference;
+          transition: transform 0.1s ease;
+        }
+        
+        /* Cyberpunk Grid Background */
+        .cyber-grid {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-image: 
+            linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 255, 65, 0.1) 1px, transparent 1px);
+          background-size: 50px 50px;
+          animation: gridMove 20s linear infinite;
+          z-index: 1;
+        }
+        
+        @keyframes gridMove {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(50px, 50px); }
+        }
+        
+        /* Floating Holo Particles */
+        .holo-particles {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 2;
+        }
+        
+        .holo-particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: #00ff41;
+          border-radius: 50%;
+          box-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41, 0 0 30px #00ff41;
+          animation: holoFloat 8s ease-in-out infinite;
+        }
+        
+        @keyframes holoFloat {
+          0%, 100% { transform: translateY(0px) translateX(0px) scale(1); opacity: 0.7; }
+          25% { transform: translateY(-30px) translateX(15px) scale(1.2); opacity: 1; }
+          50% { transform: translateY(-60px) translateX(-10px) scale(0.8); opacity: 0.5; }
+          75% { transform: translateY(-30px) translateX(20px) scale(1.1); opacity: 0.9; }
+        }
+        
+        /* Neon Scanlines */
+        .scanlines {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 255, 65, 0.03) 2px,
+            rgba(0, 255, 65, 0.03) 4px
+          );
+          pointer-events: none;
+          z-index: 3;
+          animation: scanlineMove 0.1s linear infinite;
+        }
+        
+        @keyframes scanlineMove {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(4px); }
+        }
+        
+        /* Main Container */
+        .nexus-container {
+          position: relative;
+          z-index: 10;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+        
+        /* Holographic Header */
+        .nexus-header {
+          text-align: center;
+          margin-bottom: 60px;
+          animation: materializeIn 2s ease-out;
+        }
+        
+        .nexus-title {
+          font-family: 'Orbitron', monospace;
+          font-size: 4.5rem;
+          font-weight: 900;
+          background: linear-gradient(45deg, #00ff41, #ff0080, #00d4ff, #ffaa00, #ff0080);
+          background-size: 400% 400%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: holoShift 3s ease-in-out infinite, textGlow 2s ease-in-out infinite alternate;
+          margin-bottom: 20px;
+          text-transform: uppercase;
+          letter-spacing: 8px;
+          position: relative;
+        }
+        
+        .nexus-title::before {
+          content: 'MAVERICKS NEXUS';
+          position: absolute;
+          top: 0;
+          left: 0;
+          color: rgba(255, 255, 255, 0.1);
+          transform: translate(-2px, -2px);
+          z-index: -1;
+        }
+        
+        .nexus-subtitle {
+          font-size: 1.4rem;
+          color: #00ff41;
+          font-weight: 300;
+          text-shadow: 0 0 20px #00ff41;
+          animation: pulse 2s ease-in-out infinite;
+          letter-spacing: 3px;
+        }
+        
+        @keyframes holoShift {
+          0%, 100% { background-position: 0% 50%; filter: hue-rotate(0deg); }
+          50% { background-position: 100% 50%; filter: hue-rotate(180deg); }
+        }
+        
+        @keyframes textGlow {
+          0% { text-shadow: 0 0 20px rgba(0, 255, 65, 0.5); }
+          100% { text-shadow: 0 0 40px rgba(255, 0, 128, 0.8), 0 0 60px rgba(0, 212, 255, 0.6); }
+        }
+        
+        @keyframes materializeIn {
+          0% { 
+            transform: translateY(-100px) rotateX(90deg); 
+            opacity: 0; 
+            filter: blur(20px);
+          }
+          100% { 
+            transform: translateY(0) rotateX(0deg); 
+            opacity: 1; 
+            filter: blur(0);
+          }
+        }
+        
+        /* Holographic Command Panels */
+        .command-matrix {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+          gap: 40px;
+          max-width: 1400px;
+          width: 100%;
+          animation: phaseIn 1.5s ease-out 0.5s both;
+        }
+        
+        @keyframes phaseIn {
+          0% { 
+            transform: translateY(80px) rotateX(45deg); 
+            opacity: 0; 
+            filter: blur(10px);
+          }
+          100% { 
+            transform: translateY(0) rotateX(0deg); 
+            opacity: 1; 
+            filter: blur(0);
+          }
+        }
+        
+        .holo-panel {
+          background: linear-gradient(135deg, rgba(0, 255, 65, 0.1), rgba(255, 0, 128, 0.1));
+          backdrop-filter: blur(20px);
+          border: 2px solid transparent;
+          border-radius: 25px;
+          padding: 40px;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          cursor: pointer;
+        }
+        
+        .holo-panel::before {
+          content: '';
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, #00ff41, #ff0080, #00d4ff, #ffaa00);
+          border-radius: 25px;
+          z-index: -1;
+          animation: borderRotate 4s linear infinite;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        
+        .holo-panel:hover::before {
+          opacity: 1;
+        }
+        
+        @keyframes borderRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .holo-panel::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+          transition: left 0.6s ease;
+        }
+        
+        .holo-panel:hover::after {
+          left: 100%;
+        }
+        
+        .holo-panel:hover {
+          transform: translateY(-20px) scale(1.05) rotateY(5deg);
+          box-shadow: 
+            0 30px 60px rgba(0, 255, 65, 0.3),
+            0 0 100px rgba(255, 0, 128, 0.2),
+            inset 0 0 50px rgba(0, 212, 255, 0.1);
+        }
+        
+        .panel-icon {
+          font-size: 4rem;
+          margin-bottom: 25px;
+          display: block;
+          animation: iconFloat 3s ease-in-out infinite;
+          filter: drop-shadow(0 0 20px currentColor);
+        }
+        
+        @keyframes iconFloat {
+          0%, 100% { transform: translateY(0px) rotateY(0deg); }
+          50% { transform: translateY(-10px) rotateY(180deg); }
+        }
+        
+        .panel-title {
+          font-family: 'Orbitron', monospace;
+          color: #fff;
+          font-size: 1.8rem;
+          margin-bottom: 20px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          position: relative;
+        }
+        
+        .panel-desc {
+          color: #b0b0b0;
+          line-height: 1.8;
+          margin-bottom: 35px;
+          font-size: 1.1rem;
+        }
+        
+        /* Quantum Buttons */
+        .quantum-btn {
+          background: linear-gradient(45deg, #00ff41, #00d4ff);
+          color: #000;
+          border: none;
+          padding: 18px 40px;
+          border-radius: 50px;
+          font-weight: 600;
+          font-size: 1.1rem;
+          font-family: 'Orbitron', monospace;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-decoration: none;
+          display: inline-block;
+          position: relative;
+          overflow: hidden;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .quantum-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(45deg, #ff0080, #ffaa00);
+          transition: left 0.3s ease;
+          z-index: -1;
+        }
+        
+        .quantum-btn:hover::before {
+          left: 0;
+        }
+        
+        .quantum-btn:hover {
+          transform: translateY(-5px) scale(1.05);
+          box-shadow: 
+            0 15px 35px rgba(0, 255, 65, 0.4),
+            0 0 50px rgba(0, 212, 255, 0.3);
+          color: #fff;
+        }
+        
+        .quantum-btn:active {
+          transform: translateY(-2px) scale(1.02);
+        }
+        
+        /* Neural Network Status */
+        .neural-status {
+          position: fixed;
+          top: 30px;
+          right: 30px;
+          z-index: 100;
+          animation: slideInRight 1s ease-out 1s both;
+        }
+        
+        @keyframes slideInRight {
+          0% { transform: translateX(100px); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        .status-indicator {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 255, 65, 0.3);
+          border-radius: 50px;
+          padding: 15px 25px;
+        }
+        
+        .neural-pulse {
+          width: 15px;
+          height: 15px;
+          background: #00ff41;
+          border-radius: 50%;
+          position: relative;
+          animation: neuralPulse 1.5s ease-in-out infinite;
+        }
+        
+        .neural-pulse::after {
+          content: '';
+          position: absolute;
+          top: -10px;
+          left: -10px;
+          right: -10px;
+          bottom: -10px;
+          border: 2px solid #00ff41;
+          border-radius: 50%;
+          animation: neuralRipple 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes neuralPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+        }
+        
+        @keyframes neuralRipple {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+        
+        .status-text {
+          color: #00ff41;
+          font-family: 'Orbitron', monospace;
+          font-weight: 600;
+          font-size: 0.9rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+          .nexus-title {
+            font-size: 2.5rem;
+            letter-spacing: 3px;
+          }
+          
+          .command-matrix {
+            grid-template-columns: 1fr;
+            gap: 30px;
+          }
+          
+          .holo-panel {
+            padding: 30px;
+          }
+          
+          .neural-status {
+            top: 20px;
+            right: 20px;
+          }
+          
+          body {
+            cursor: auto;
+          }
+          
+          .cursor {
+            display: none;
+          }
+        }
+        
+        /* Loading Screen */
+        .loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: #000;
+          z-index: 10000;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          animation: fadeOut 2s ease-in-out 3s forwards;
+        }
+        
+        .loading-text {
+          font-family: 'Orbitron', monospace;
+          color: #00ff41;
+          font-size: 1.5rem;
+          margin-bottom: 30px;
+          animation: typewriter 2s steps(20) 1s forwards;
+          width: 0;
+          overflow: hidden;
+          white-space: nowrap;
+        }
+        
+        @keyframes typewriter {
+          to { width: 100%; }
+        }
+        
+        .loading-bar {
+          width: 300px;
+          height: 4px;
+          background: rgba(0, 255, 65, 0.2);
+          border-radius: 10px;
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .loading-progress {
+          height: 100%;
+          background: linear-gradient(90deg, #00ff41, #00d4ff);
+          border-radius: 10px;
+          animation: loadProgress 2s ease-in-out 1s forwards;
+          width: 0;
+        }
+        
+        @keyframes loadProgress {
+          to { width: 100%; }
+        }
+        
+        @keyframes fadeOut {
+          to { opacity: 0; pointer-events: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <!-- Loading Screen -->
+      <div class="loading-overlay">
+        <div class="loading-text">INITIALIZING NEXUS...</div>
+        <div class="loading-bar">
+          <div class="loading-progress"></div>
+        </div>
+      </div>
+      
+      <!-- Custom Cursor -->
+      <div class="cursor"></div>
+      
+      <!-- Cyberpunk Effects -->
+      <div class="cyber-grid"></div>
+      <div class="holo-particles" id="holoParticles"></div>
+      <div class="scanlines"></div>
+      
+      <!-- Neural Status -->
+      <div class="neural-status">
+        <div class="status-indicator">
+          <div class="neural-pulse"></div>
+          <span class="status-text">Neural Link Active</span>
+        </div>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="nexus-container">
+        <div class="nexus-header">
+          <h1 class="nexus-title">Mavericks Nexus</h1>
+          <p class="nexus-subtitle">◦ ESP32 QUANTUM COMMAND CENTER ◦</p>
+        </div>
+        
+        <div class="command-matrix">
+          <div class="holo-panel" onclick="location.href='/quantum-status'">
+            <div class="panel-icon">🔮</div>
+            <h3 class="panel-title">Quantum Status</h3>
+            <p class="panel-desc">Monitor neural pathways, quantum flux, and system vitals through advanced holographic interfaces.</p>
+            <button class="quantum-btn">Access Matrix</button>
+          </div>
+          
+          <div class="holo-panel" onclick="location.href='/cyber-control'">
+            <div class="panel-icon">⚡</div>
+            <h3 class="panel-title">Cyber Control</h3>
+            <p class="panel-desc">Command connected devices through cybernetic interfaces and neural-link protocols.</p>
+            <button class="quantum-btn">Enter Cyberspace</button>
+          </div>
+          
+          <div class="holo-panel" onclick="location.href='/data-nexus'">
+            <div class="panel-icon">📊</div>
+            <h3 class="panel-title">Data Nexus</h3>
+            <p class="panel-desc">Visualize quantum data streams and analyze neural network patterns in real-time.</p>
+            <button class="quantum-btn">Jack In</button>
+          </div>
+          
+          <div class="holo-panel" onclick="location.href='/neural-config'">
+            <div class="panel-icon">🧠</div>
+            <h3 class="panel-title">Neural Config</h3>
+            <p class="panel-desc">Reconfigure quantum parameters and optimize neural pathways for maximum efficiency.</p>
+            <button class="quantum-btn">Hack Reality</button>
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        // Enhanced Cursor
+        document.addEventListener('mousemove', (e) => {
+          const cursor = document.querySelector('.cursor');
+          cursor.style.left = e.clientX - 10 + 'px';
+          cursor.style.top = e.clientY - 10 + 'px';
+        });
+        
+        // Generate Holographic Particles
+        function generateHoloParticles() {
+          const container = document.getElementById('holoParticles');
+          const numParticles = 80;
+          
+          for (let i = 0; i < numParticles; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'holo-particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 8 + 's';
+            particle.style.animationDuration = (Math.random() * 4 + 6) + 's';
+            
+            // Random colors for variety
+            const colors = ['#00ff41', '#ff0080', '#00d4ff', '#ffaa00'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.background = color;
+            particle.style.boxShadow = 0 0 10px ${color}, 0 0 20px ${color}, 0 0 30px ${color};
+            
+            container.appendChild(particle);
+          }
+        }
+        
+        // Advanced 3D Panel Effects
+        document.addEventListener('mousemove', (e) => {
+          const panels = document.querySelectorAll('.holo-panel');
+          panels.forEach(panel => {
+            const rect = panel.getBoundingClientRect();
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+            
+            const rotateX = (y / rect.height) * 20;
+            const rotateY = (x / rect.width) * 20;
+            
+            if (e.clientX >= rect.left && e.clientX <= rect.right && 
+                e.clientY >= rect.top && e.clientY <= rect.bottom) {
+              panel.style.transform = perspective(1000px) rotateX(${-rotateX}deg) rotateY(${rotateY}deg) translateZ(20px) scale(1.05);
+            } else {
+              panel.style.transform = '';
+            }
+          });
+        });
+        
+        // Glitch Effect on Click
+        document.querySelectorAll('.quantum-btn').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            this.style.animation = 'none';
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+              this.style.animation = '';
+              this.style.transform = '';
+            }, 150);
+          });
+        });
+        
+        // Cyberpunk Audio Effects (optional)
+        function playHoverSound() {
+          // Add subtle audio feedback if needed
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBKLe9ttxJQUuhM/z2Ik5CRZiuzTpnhMMQ6rl8LZmHgI7k9n0z2IrBSl/zO/eizEHLILQ9NeKOwkWYbo06po0...');
+        }
+        
+        // Initialize
+        generateHoloParticles();
+        
+        // Performance optimization
+        let ticking = false;
+        function updateParticles() {
+          // Particle position updates if needed
+          ticking = false;
+        }
+        
+        function requestTick() {
+          if (!ticking) {
+            requestAnimationFrame(updateParticles);
+            ticking = true;
+          }
+        }
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
+  digitalWrite(led, LOW);
+}
+
+// ====== Quantum Status Page ======
+void handleQuantumStatus() {
+  digitalWrite(led, HIGH);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>🔮 Quantum Status Matrix</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Orbitron', monospace;
+          background: 
+            radial-gradient(circle at 20% 20%, rgba(0, 255, 65, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(255, 0, 128, 0.1) 0%, transparent 50%),
+            linear-gradient(135deg, #000 0%, #0a0a0a 50%, #000 100%);
+          color: white;
+          min-height: 100vh;
+          padding: 20px;
+          position: relative;
+          overflow-x: hidden;
+        }
+        
+        .matrix-bg {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-image: 
+            linear-gradient(rgba(0, 255, 65, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 255, 65, 0.05) 1px, transparent 1px);
+          background-size: 30px 30px;
+          animation: matrixScroll 15s linear infinite;
+          z-index: 1;
+        }
+        
+        @keyframes matrixScroll {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(30px, 30px); }
+        }
+        
+        .container {
+          position: relative;
+          z-index: 10;
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        
+        .quantum-nav {
+          background: linear-gradient(45deg, rgba(0, 255, 65, 0.2), rgba(255, 0, 128, 0.2));
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 255, 65, 0.3);
+          border-radius: 50px;
+          padding: 15px 30px;
+          display: inline-block;
+          margin-bottom: 40px;
+          animation: materializeIn 1s ease-out;
+        }
+        
+        .nav-btn {
+          background: transparent;
+          color: #00ff41;
+          border: none;
+          text-decoration: none;
+          font-family: 'Orbitron', monospace;
+          font-weight: 600;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .nav-btn:hover {
+          color: #ff0080;
+          text-shadow: 0 0 10px #ff0080;
+        }
+        
+        .status-header {
+          text-align: center;
+          margin-bottom: 50px;
+          animation: holoAppear 1.5s ease-out 0.3s both;
+        }
+        
+        .status-title {
+          font-size: 3rem;
+          font-weight: 900;
+          background: linear-gradient(45deg, #00ff41, #00d4ff, #ff0080);
+          background-size: 200% 200%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: quantumShift 2s ease-in-out infinite;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 5px;
+        }
+        
+        @keyframes quantumShift {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        
+        @keyframes holoAppear {
+          0% { transform: rotateX(90deg) translateY(-50px); opacity: 0; }
+          100% { transform: rotateX(0deg) translateY(0); opacity: 1; }
+        }
+        
+        .quantum-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 30px;
+          animation: gridMaterialize 1.8s ease-out 0.6s both;
+        }
+        
+        @keyframes gridMaterialize {
+          0% { transform: scale(0.8) rotateY(45deg); opacity: 0; filter: blur(10px); }
+          100% { transform: scale(1) rotateY(0deg); opacity: 1; filter: blur(0); }
+        }
+        
+        .quantum-panel {
+          background: linear-gradient(135deg, rgba(0, 255, 65, 0.1), rgba(0, 212, 255, 0.1));
+          backdrop-filter: blur(25px);
+          border: 2px solid transparent;
+          border-radius: 20px;
+          padding: 35px;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        .quantum-panel::before {
+          content: '';
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, #00ff41, #00d4ff, #ff0080, #ffaa00);
+          border-radius: 20px;
+          z-index: -1;
+          animation: quantumBorder 3s linear infinite;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        
+        .quantum-panel:hover::before {
+          opacity: 0.7;
+        }
+        
+        @keyframes quantumBorder {
+          0% { transform: rotate(0deg) scale(1); }
+          100% { transform: rotate(360deg) scale(1.05); }
+        }
+        
+        .quantum-panel:hover {
+          transform: translateY(-15px) rotateY(5deg);
+          box-shadow: 
+            0 25px 50px rgba(0, 255, 65, 0.3),
+            0 0 80px rgba(0, 212, 255, 0.2);
+        }
+        
+        .quantum-value {
+          font-size: 2.8rem;
+          font-weight: 900;
+          background: linear-gradient(45deg, #00ff41, #00d4ff);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          margin-bottom: 15px;
+          animation: dataStream 2s ease-in-out infinite;
+        }
+        
+        @keyframes dataStream {
+          0%, 100% { text-shadow: 0 0 20px rgba(0, 255, 65, 0.5); }
+          50% { text-shadow: 0 0 30px rgba(0, 212, 255, 0.8); }
+        }
+        
+        .quantum-label {
+          color: #b0b0b0;
+          font-size: 1rem;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          margin-bottom: 10px;
+        }
+        
+        .quantum-status {
+          color: #00ff41;
+          font-size: 0.9rem;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        
+        @keyframes materializeIn {
+          0% { transform: translateY(-30px) rotateX(45deg); opacity: 0; }
+          100% { transform: translateY(0) rotateX(0deg); opacity: 1; }
+        }
+        
+        /* Holographic Data Visualization */
+        .holo-chart {
+          margin-top: 50px;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 255, 65, 0.3);
+          border-radius: 15px;
+          padding: 30px;
+          animation: chartAppear 2s ease-out 1s both;
+        }
+        
+        @keyframes chartAppear {
+          0% { transform: translateY(50px) scale(0.9); opacity: 0; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        
+        .chart-title {
+          color: #00ff41;
+          font-size: 1.5rem;
+          font-weight: 700;
+          text-align: center;
+          margin-bottom: 25px;
+          text-transform: uppercase;
+          letter-spacing: 3px;
+        }
+        
+        .neural-wave {
+          width: 100%;
+          height: 100px;
+          background: 
+            linear-gradient(90deg, 
+              transparent 0%, 
+              rgba(0, 255, 65, 0.3) 20%, 
+              rgba(0, 212, 255, 0.3) 40%, 
+              rgba(255, 0, 128, 0.3) 60%, 
+              rgba(255, 170, 0, 0.3) 80%, 
+              transparent 100%);
+          border-radius: 10px;
+          position: relative;
+          overflow: hidden;
+          animation: neuralFlow 3s ease-in-out infinite;
+        }
+        
+        @keyframes neuralFlow {
+          0%, 100% { background-position: -200% 0; }
+          50% { background-position: 200% 0; }
+        }
+        
+        .neural-wave::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: #00ff41;
+          transform: translateY(-50%);
+          animation: waveform 2s ease-in-out infinite;
+          box-shadow: 0 0 10px #00ff41;
+        }
+        
+        @keyframes waveform {
+          0%, 100% { width: 10%; margin-left: 0; }
+          50% { width: 80%; margin-left: 10%; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="matrix-bg"></div>
+      
+      <div class="container">
+        <div class="quantum-nav">
+          <a href="/" class="nav-btn">← Return to Nexus</a>
+        </div>
+        
+        <div class="status-header">
+          <h1 class="status-title">Quantum Status Matrix</h1>
+        </div>
+        
+        <div class="quantum-grid">
+          <div class="quantum-panel">
+            <div class="quantum-value" id="memValue">)" + String(ESP.getFreeHeap()) + R"rawliteral(</div>
+            <div class="quantum-label">Neural Memory</div>
+            <div class="quantum-status">BYTES FREE</div>
+          </div>
+          
+          <div class="quantum-panel">
+            <div class="quantum-value" id="uptimeValue">)" + String(millis() / 1000) + R"rawliteral(</div>
+            <div class="quantum-label">Quantum Uptime</div>
+            <div class="quantum-status">CYCLES ACTIVE</div>
+          </div>
+          
+          <div class="quantum-panel">
+            <div class="quantum-value" id="signalValue">)" + String(WiFi.RSSI()) + R"rawliteral(</div>
+            <div class="quantum-label">Neural Signal</div>
+            <div class="quantum-status">dBm STRENGTH</div>
+          </div>
+          
+          <div class="quantum-panel">
+            <div class="quantum-value" id="ipValue">)" + WiFi.localIP().toString() + R"rawliteral(</div>
+            <div class="quantum-label">Matrix Address</div>
+            <div class="quantum-status">CONNECTED</div>
+          </div>
+        </div>
+        
+        <div class="holo-chart">
+          <div class="chart-title">Neural Activity Visualization</div>
+          <div class="neural-wave"></div>
+        </div>
+      </div>
+      
+      <script>
+        // Real-time data updates with glitch effects
+        function updateQuantumData() {
+          const values = document.querySelectorAll('.quantum-value');
+          values.forEach(value => {
+            // Add glitch effect during update
+            value.style.filter = 'blur(2px) brightness(0.5)';
+            setTimeout(() => {
+              value.style.filter = '';
+            }, 200);
+          });
+          
+          // Simulate data refresh (in real implementation, fetch from ESP32)
+          setTimeout(() => {
+            location.reload();
+          }, 5000);
+        }
+        
+        // Initialize real-time updates
+        setInterval(updateQuantumData, 10000);
+        
+        // Add hover effects to panels
+        document.querySelectorAll('.quantum-panel').forEach(panel => {
+          panel.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-15px) rotateY(5deg) scale(1.02)';
+          });
+          
+          panel.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+          });
+        });
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
+  digitalWrite(led, LOW);
+}
+
+// ====== Cyber Control Page ======
+void handleCyberControl() {
+  digitalWrite(led, HIGH);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>⚡ Cyber Control Matrix</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Orbitron', monospace;
+          background: 
+            radial-gradient(circle at 30% 70%, rgba(255, 0, 128, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 70% 30%, rgba(0, 255, 65, 0.15) 0%, transparent 50%),
+            linear-gradient(135deg, #000011 0%, #001122 50%, #000011 100%);
+          color: white;
+          min-height: 100vh;
+          padding: 20px;
+          position: relative;
+        }
+        
+        .cyber-grid {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-image: 
+            linear-gradient(rgba(255, 0, 128, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 0, 128, 0.1) 1px, transparent 1px);
+          background-size: 40px 40px;
+          animation: cyberPulse 20s linear infinite;
+          z-index: 1;
+        }
+        
+        @keyframes cyberPulse {
+          0%, 100% { opacity: 0.3; transform: translate(0, 0); }
+          50% { opacity: 0.6; transform: translate(20px, 20px); }
+        }
+        
+        .container {
+          position: relative;
+          z-index: 10;
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+        
+        .cyber-nav {
+          background: linear-gradient(45deg, rgba(255, 0, 128, 0.2), rgba(0, 255, 65, 0.2));
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 0, 128, 0.4);
+          border-radius: 50px;
+          padding: 15px 30px;
+          display: inline-block;
+          margin-bottom: 40px;
+          animation: navSlide 1s ease-out;
+        }
+        
+        @keyframes navSlide {
+          0% { transform: translateX(-100px); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        .nav-btn {
+          background: transparent;
+          color: #ff0080;
+          border: none;
+          text-decoration: none;
+          font-family: 'Orbitron', monospace;
+          font-weight: 600;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .nav-btn:hover {
+          color: #00ff41;
+          text-shadow: 0 0 15px #00ff41;
+        }
+        
+        .control-header {
+          text-align: center;
+          margin-bottom: 50px;
+          animation: headerMaterialize 1.5s ease-out 0.3s both;
+        }
+        
+        .control-title {
+          font-size: 3.5rem;
+          font-weight: 900;
+          background: linear-gradient(45deg, #ff0080, #ffaa00, #00ff41);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: cyberGlow 2s ease-in-out infinite;
+          margin-bottom: 20px;
+          text-transform: uppercase;
+          letter-spacing: 6px;
+        }
+        
+        @keyframes cyberGlow {
+          0%, 100% { background-position: 0% 50%; filter: hue-rotate(0deg); }
+          50% { background-position: 100% 50%; filter: hue-rotate(90deg); }
+        }
+        
+        @keyframes headerMaterialize {
+          0% { transform: rotateX(90deg) translateZ(-100px); opacity: 0; }
+          100% { transform: rotateX(0deg) translateZ(0px); opacity: 1; }
+        }
+        
+        .control-matrix {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 40px;
+          animation: matrixAssemble 2s ease-out 0.6s both;
+        }
+        
+        @keyframes matrixAssemble {
+          0% { transform: scale(0.5) rotateZ(45deg); opacity: 0; filter: blur(20px); }
+          100% { transform: scale(1) rotateZ(0deg); opacity: 1; filter: blur(0); }
+        }
+        
+        .cyber-console {
+          background: linear-gradient(135deg, rgba(255, 0, 128, 0.1), rgba(0, 255, 65, 0.1));
+          backdrop-filter: blur(30px);
+          border: 2px solid transparent;
+          border-radius: 25px;
+          padding: 50px;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .cyber-console::before {
+          content: '';
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, #ff0080, #00ff41, #00d4ff, #ffaa00);
+          border-radius: 25px;
+          z-index: -1;
+          animation: consoleBorder 4s linear infinite;
+          opacity: 0;
+          transition: opacity 0.4s ease;
+        }
+        
+        .cyber-console:hover::before {
+          opacity: 0.8;
+        }
+        
+        @keyframes consoleBorder {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .console-icon {
+          font-size: 5rem;
+          margin-bottom: 30px;
+          display: block;
+          animation: iconPulse 3s ease-in-out infinite;
+          filter: drop-shadow(0 0 30px currentColor);
+        }
+        
+        @keyframes iconPulse {
+          0%, 100% { transform: scale(1) rotateY(0deg); }
+          50% { transform: scale(1.1) rotateY(180deg); }
+        }
+        
+        .console-title {
+          font-size: 2.5rem;
+          font-weight: 900;
+          color: #ff0080;
+          margin-bottom: 25px;
+          text-transform: uppercase;
+          letter-spacing: 4px;
+          text-shadow: 0 0 20px #ff0080;
+        }
+        
+        .console-desc {
+          color: #b0b0b0;
+          font-size: 1.2rem;
+          line-height: 1.8;
+          margin-bottom: 40px;
+        }
+        
+        .cyber-controls {
+          display: flex;
+          gap: 30px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+        
+        .neural-btn {
+          background: linear-gradient(45deg, #ff0080, #ff4040);
+          color: #fff;
+          border: none;
+          padding: 20px 50px;
+          border-radius: 50px;
+          font-weight: 700;
+          font-size: 1.3rem;
+          font-family: 'Orbitron', monospace;
+          cursor: pointer;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          text-decoration: none;
+          display: inline-block;
+          position: relative;
+          overflow: hidden;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          box-shadow: 0 10px 30px rgba(255, 0, 128, 0.3);
+        }
+        
+        .neural-btn.off {
+          background: linear-gradient(45deg, #333, #666);
+          box-shadow: 0 10px 30px rgba(102, 102, 102, 0.3);
+        }
+        
+        .neural-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(45deg, #00ff41, #00d4ff);
+          transition: left 0.5s ease;
+          z-index: -1;
+        }
+        
+        .neural-btn:hover::before {
+          left: 0;
+        }
+        
+        .neural-btn:hover {
+          transform: translateY(-8px) scale(1.08);
+          box-shadow: 
+            0 20px 50px rgba(255, 0, 128, 0.5),
+            0 0 80px rgba(0, 255, 65, 0.3);
+        }
+        
+        .neural-btn:active {
+          transform: translateY(-4px) scale(1.04);
+        }
+        
+        /* Status Indicator */
+        .led-status {
+          margin-top: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 20px;
+        }
+        
+        .status-orb {
+          width: 25px;
+          height: 25px;
+          border-radius: 50%;
+          background: #333;
+          position: relative;
+          transition: all 0.5s ease;
+        }
+        
+        .status-orb.active {
+          background: #00ff41;
+          box-shadow: 
+            0 0 20px #00ff41,
+            0 0 40px #00ff41,
+            0 0 60px #00ff41;
+          animation: orbPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes orbPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+        }
+        
+        .status-text {
+          color: #b0b0b0;
+          font-family: 'Orbitron', monospace;
+          font-size: 1.1rem;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+        }
+        
+        .status-text.active {
+          color: #00ff41;
+          text-shadow: 0 0 15px #00ff41;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="cyber-grid"></div>
+      
+      <div class="container">
+        <div class="cyber-nav">
+          <a href="/" class="nav-btn">← Exit Cyberspace</a>
+        </div>
+        
+        <div class="control-header">
+          <h1 class="control-title">Cyber Control</h1>
+        </div>
+        
+        <div class="control-matrix">
+          <div class="cyber-console">
+            <div class="console-icon">⚡</div>
+            <h2 class="console-title">Neural LED Matrix</h2>
+            <p class="console-desc">
+              Interface with the quantum LED matrix through neural-link protocols.
+              Engage cybernetic control systems for direct hardware manipulation.
+            </p>
+            
+            <div class="cyber-controls">
+              <a href="/neural-led/activate" class="neural-btn">Activate Matrix</a>
+              <a href="/neural-led/deactivate" class="neural-btn off">Deactivate</a>
+            </div>
+            
+            <div class="led-status">
+              <div class="status-orb" id="ledOrb"></div>
+              <span class="status-text" id="ledStatus">Matrix Status: Standby</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        // Simulate LED status (in real implementation, get from ESP32)
+        function updateLEDStatus() {
+          const orb = document.getElementById('ledOrb');
+          const status = document.getElementById('ledStatus');
+          
+          // This would be replaced with actual status from ESP32
+          const isActive = Math.random() > 0.5;
+          
+          if (isActive) {
+            orb.classList.add('active');
+            status.classList.add('active');
+            status.textContent = 'Matrix Status: Active';
+          } else {
+            orb.classList.remove('active');
+            status.classList.remove('active');
+            status.textContent = 'Matrix Status: Standby';
+          }
+        }
+        
+        // Add click effects
+        document.querySelectorAll('.neural-btn').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            // Create ripple effect
+            const ripple = document.createElement('div');
+            ripple.style.position = 'absolute';
+            ripple.style.borderRadius = '50%';
+            ripple.style.background = 'rgba(255, 255, 255, 0.6)';
+            ripple.style.transform = 'scale(0)';
+            ripple.style.animation = 'ripple 0.6s linear';
+            ripple.style.left = (e.offsetX - 10) + 'px';
+            ripple.style.top = (e.offsetY - 10) + 'px';
+            ripple.style.width = '20px';
+            ripple.style.height = '20px';
+            
+            this.style.position = 'relative';
+            this.appendChild(ripple);
+            
+            setTimeout(() => {
+              ripple.remove();
+            }, 600);
+          });
+        });
+        
+        // Add ripple keyframes
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes ripple {
+            to {
+              transform: scale(4);
+              opacity: 0;
+            }
+          }
+        `;
+        document.head.appendChild(style);
+        
+        // Initialize
+        updateLEDStatus();
+        setInterval(updateLEDStatus, 3000);
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
+  digitalWrite(led, LOW);
+}
+
+// ====== Neural LED Control Functions ======
+void handleNeuralLEDOn() {
+  digitalWrite(led, HIGH);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Neural Matrix Activated</title>
+      <style>
+        body {
+          font-family: 'Orbitron', monospace;
+          background: radial-gradient(circle, #001a00, #000);
+          color: #00ff41;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+        }
+        
+        .success-icon {
+          font-size: 8rem;
+          margin-bottom: 30px;
+          animation: successPulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes successPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+        }
+        
+        .success-text {
+          font-size: 2rem;
+          font-weight: 700;
+          margin-bottom: 20px;
+          text-transform: uppercase;
+          letter-spacing: 4px;
+          text-shadow: 0 0 20px #00ff41;
+        }
+        
+        .redirect-text {
+          font-size: 1rem;
+          color: #b0b0b0;
+          margin-bottom: 30px;
+        }
+        
+        .return-btn {
+          background: linear-gradient(45deg, #00ff41, #00d4ff);
+          color: #000;
+          border: none;
+          padding: 15px 30px;
+          border-radius: 50px;
+          font-weight: 600;
+          text-decoration: none;
+          font-family: 'Orbitron', monospace;
+          text-transform: uppercase;
+          transition: all 0.3s ease;
+        }
+        
+        .return-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(0, 255, 65, 0.4);
+        }
+      </style>
+    </head>
+    <body>
+      <div class="success-icon">⚡</div>
+      <div class="success-text">Neural Matrix Activated</div>
+      <div class="redirect-text">Quantum LED systems are now online</div>
+      <a href="/cyber-control" class="return-btn">Return to Control</a>
+      
+      <script>
+        setTimeout(() => {
+          window.location.href = '/cyber-control';
+        }, 3000);
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
+}
+
+void handleNeuralLEDOff() {
+  digitalWrite(led, LOW);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Neural Matrix Deactivated</title>
+      <style>
+        body {
+          font-family: 'Orbitron', monospace;
+          background: radial-gradient(circle, #1a0000, #000);
+          color: #ff4040;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+        }
+        
+        .deactivate-icon {
+          font-size: 8rem;
+          margin-bottom: 30px;
+          animation: deactivatePulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes deactivatePulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(0.9); opacity: 0.5; }
+        }
+        
+        .deactivate-text {
+          font-size: 2rem;
+          font-weight: 700;
+          margin-bottom: 20px;
+          text-transform: uppercase;
+          letter-spacing: 4px;
+          text-shadow: 0 0 20px #ff4040;
+        }
+        
+        .redirect-text {
+          font-size: 1rem;
+          color: #b0b0b0;
+          margin-bottom: 30px;
+        }
+        
+        .return-btn {
+          background: linear-gradient(45deg, #ff4040, #ff8080);
+          color: #fff;
+          border: none;
+          padding: 15px 30px;
+          border-radius: 50px;
+          font-weight: 600;
+          text-decoration: none;
+          font-family: 'Orbitron', monospace;
+          text-transform: uppercase;
+          transition: all 0.3s ease;
+        }
+        
+        .return-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(255, 64, 64, 0.4);
+        }
+      </style>
+    </head>
+    <body>
+      <div class="deactivate-icon">🔴</div>
+      <div class="deactivate-text">Neural Matrix Deactivated</div>
+      <div class="redirect-text">Quantum LED systems are now offline</div>
+      <a href="/cyber-control" class="return-btn">Return to Control</a>
+      
+      <script>
+        setTimeout(() => {
+          window.location.href = '/cyber-control';
+        }, 3000);
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(200, "text/html", html);
+}
+
+// ====== Enhanced 404 Page ======
+void handleNotFound() {
+  digitalWrite(led, HIGH);
+  String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>🚫 Nexus Access Denied</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        body {
+          font-family: 'Orbitron', monospace;
+          background: 
+            radial-gradient(circle at 25% 25%, rgba(255, 0, 0, 0.2) 0%, transparent 50%),
+            radial-gradient(circle at 75% 75%, rgba(255, 100, 0, 0.2) 0%, transparent 50%),
+            linear-gradient(135deg, #000 0%, #220000 50%, #000 100%);
+          color: white;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .glitch-grid {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-image: 
+            linear-gradient(rgba(255, 0, 0, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 0, 0, 0.1) 1px, transparent 1px);
+          background-size: 60px 60px;
+          animation: glitchMove 5s ease-in-out infinite;
+          z-index: 1;
+        }
+        
+        @keyframes glitchMove {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 0.3; }
+          25% { transform: translate(5px, -5px) rotate(1deg); opacity: 0.6; }
+          50% { transform: translate(-3px, 3px) rotate(-1deg); opacity: 0.9; }
+          75% { transform: translate(7px, 2px) rotate(0.5deg); opacity: 0.4; }
+        }
+        
+        .error-container {
+          position: relative;
+          z-index: 10;
+          animation: errorMaterialize 2s ease-out;
+        }
+        
+        @keyframes errorMaterialize {
+          0% { 
+            transform: scale(0.5) rotateX(90deg); 
+            opacity: 0; 
+            filter: blur(20px); 
+          }
+          100% { 
+            transform: scale(1) rotateX(0deg); 
+            opacity: 1; 
+            filter: blur(0); 
+          }
+        }
+        
+        .error-code {
+          font-size: 12rem;
+          font-weight: 900;
+          background: linear-gradient(45deg, #ff0000, #ff6600, #ffaa00);
+          background-size: 200% 200%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: errorGlitch 1s ease-in-out infinite;
+          margin-bottom: 30px;
+          position: relative;
+        }
+        
+        .error-code::before {
+          content: '404';
+          position: absolute;
+          top: 0;
+          left: 0;
+          color: rgba(255, 255, 255, 0.1);
+          transform: translate(-3px, -3px);
+          z-index: -1;
+          animation: shadowGlitch 2s ease-in-out infinite;
+        }
+        
+        @keyframes errorGlitch {
+          0%, 100% { 
+            background-position: 0% 50%; 
+            filter: hue-rotate(0deg);
+            text-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+          }
+          25% { 
+            background-position: 100% 50%; 
+            filter: hue-rotate(90deg);
+            text-shadow: 2px 0 30px rgba(255, 102, 0, 0.8);
+          }
+          50% { 
+            background-position: 0% 100%; 
+            filter: hue-rotate(180deg);
+            text-shadow: -2px 0 30px rgba(255, 170, 0, 0.8);
+          }
+          75% { 
+            background-position: 100% 100%; 
+            filter: hue-rotate(270deg);
+            text-shadow: 0 2px 30px rgba(255, 0, 0, 0.8);
+          }
+        }
+        
+        @keyframes shadowGlitch {
+          0%, 100% { transform: translate(-3px, -3px); }
+          25% { transform: translate(3px, -3px); }
+          50% { transform: translate(3px, 3px); }
+          75% { transform: translate(-3px, 3px); }
+        }
+        
+        .error-title {
+          font-size: 2.5rem;
+          font-weight: 700;
+          color: #ff0000;
+          margin-bottom: 20px;
+          text-transform: uppercase;
+          letter-spacing: 4px;
+          text-shadow: 0 0 20px #ff0000;
+          animation: titleFlicker 3s ease-in-out infinite;
+        }
+        
+        @keyframes titleFlicker {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+          75% { opacity: 0.9; }
+        }
+        
+        .error-message {
+          font-size: 1.2rem;
+          color: #b0b0b0;
+          margin-bottom: 40px;
+          line-height: 1.6;
+        }
+        
+        .nexus-btn {
+          background: linear-gradient(45deg, #ff0000, #ff6600);
+          color: white;
+          border: none;
+          padding: 18px 40px;
+          border-radius: 50px;
+          font-weight: 600;
+          font-size: 1.2rem;
+          font-family: 'Orbitron', monospace;
+          cursor: pointer;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          text-decoration: none;
+          display: inline-block;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .nexus-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(45deg, #00ff41, #00d4ff);
+          transition: left 0.5s ease;
+          z-index: -1;
+        }
+        
+        .nexus-btn:hover::before {
+          left: 0;
+        }
+        
+        .nexus-btn:hover {
+          transform: translateY(-5px) scale(1.05);
+          box-shadow: 
+            0 15px 40px rgba(255, 0, 0, 0.4),
+            0 0 60px rgba(255, 102, 0, 0.3);
+        }
+        
+        /* Floating Error Particles */
+        .error-particles {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 2;
+        }
+        
+        .error-particle {
+          position: absolute;
+          width: 3px;
+          height: 3px;
+          background: #ff0000;
+          border-radius: 50%;
+          animation: errorFloat 6s ease-in-out infinite;
+          box-shadow: 0 0 10px #ff0000;
+        }
+        
+        @keyframes errorFloat {
+          0%, 100% { transform: translateY(0px) translateX(0px) scale(1); opacity: 0.6; }
+          25% { transform: translateY(-40px) translateX(20px) scale(1.3); opacity: 1; }
+          50% { transform: translateY(-80px) translateX(-15px) scale(0.7); opacity: 0.4; }
+          75% { transform: translateY(-40px) translateX(25px) scale(1.1); opacity: 0.8; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="glitch-grid"></div>
+      <div class="error-particles" id="errorParticles"></div>
+      
+      <div class="error-container">
+        <div class="error-code">404</div>
+        <h1 class="error-title">Access Denied</h1>
+        <p class="error-message">
+          The requested neural pathway does not exist in the quantum matrix.<br>
+          This sector of cyberspace is currently unreachable.
+        </p>
+        <a href="/" class="nexus-btn">Return to Nexus</a>
+      </div>
+      
+      <script>
+        // Generate error particles
+        function generateErrorParticles() {
+          const container = document.getElementById('errorParticles');
+          const numParticles = 30;
+          
+          for (let i = 0; i < numParticles; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'error-particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 6 + 's';
+            particle.style.animationDuration = (Math.random() * 3 + 4) + 's';
+            
+            const colors = ['#ff0000', '#ff6600', '#ffaa00'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.background = color;
+            particle.style.boxShadow = 0 0 10px ${color};
+            
+            container.appendChild(particle);
+          }
+        }
+        
+        generateErrorParticles();
+      </script>
+    </body>
+    </html>
+  )rawliteral";
+  server.send(404, "text/html", html);
+  digitalWrite(led, LOW);
+}
+
+void setup(void) {
+  pinMode(led, OUTPUT);
+  digitalWrite(led, LOW);
+  Serial.begin(115200);
+  
+  // Connect to WiFi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  
+  // Start mDNS
+  if (MDNS.begin("mavericks-nexus")) {
+    Serial.println("MDNS responder started: mavericks-nexus.local");
+  }
+  
+  // Routes
+  server.on("/", handleRoot);
+  server.on("/quantum-status", handleQuantumStatus);
+  server.on("/cyber-control", handleCyberControl);
+  server.on("/data-nexus", []() {
+    server.send(200, "text/html", "<h1>Data Nexus - Coming Soon!</h1><p>Neural data visualization systems are being calibrated...</p><a href='/'>Return to Nexus</a>");
+  });
+  server.on("/neural-config", []() {
+    server.send(200, "text/html", "<h1>Neural Config - Coming Soon!</h1><p>Quantum configuration protocols are being initialized...</p><a href='/'>Return to Nexus</a>");
+  });
+  server.on("/neural-led/activate", handleNeuralLEDOn);
+  server.on("/neural-led/deactivate", handleNeuralLEDOff);
+  server.onNotFound(handleNotFound);
+  
+  // Start Server
+  server.begin();
+  Serial.println("🚀 MAVERICKS NEXUS SERVER ONLINE 🚀");
+  Serial.println("Access at: http://mavericks-nexus.local");
+}
+
+void loop(void) {
+  server.handleClient();
+}
