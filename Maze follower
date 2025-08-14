@@ -1,0 +1,592 @@
+// =========================
+// ESP32 Maze Solver - Standalone Version (Updated)
+// Dead-end detection -> 360° turn (configurable), better line-loss handling
+// =========================
+
+// =========================
+// Motor Driver Pins (TB6612FNG)
+// =========================
+const int PWMA = 19, AIN1 = 18, AIN2 = 5;   // Left motor
+const int PWMB = 21, BIN1 = 4,  BIN2 = 15;  // Right motor
+const int STBY = 2;                         // Standby
+
+// =========================
+// Sensors (8-channel array)
+// =========================
+const int SENSOR_PINS[8] = {25, 32, 33, 34, 35, 36, 39, 26};
+const int NUM_SENSORS = 8;
+int sensorMin[NUM_SENSORS], sensorMax[NUM_SENSORS];
+int sensorValues[NUM_SENSORS];        // 0..1000 normalized
+uint8_t sBin[NUM_SENSORS];            // 0/1 after thresholding (white/black)
+int binThreshold = 500;               // tweak if needed
+
+// =========================
+// Run Modes
+// =========================
+enum RunMode { IDLE, DRYRUN, FASTRUN };
+RunMode mode = IDLE;
+
+// =========================
+// Maze Recording
+// =========================
+char path[200];   // recorded moves during Dry Run: 'L','R','S','B'
+char pathTmp[200];
+int pIdx = 0;     // write index in path
+
+// =========================
+// Speed & Timing
+// =========================
+int fwdSpeed  = 120;   // base speed used for Dry Run
+int turnSpeed = 130;   // turning speed used for Dry Run
+int fastSpeed = 180;   // speed used during Fast Run (replay)
+unsigned long goalHoldMs = 300; // must see goal condition for this long
+
+// ---- Turning timings (TUNE THESE) ----
+// Desired dead-end spin angle: 360 for full spin, 180 for U-turn
+const int TURN_AROUND_DEGREES = 180;
+// Time (ms) required on your bot to rotate 180° at 'turnSpeed'
+unsigned long TURN_180_MS = 600;     // <- tune on your floor & battery
+// Time (ms) required to rotate 90° (used if you want later)
+unsigned long TURN_90_MS  = TURN_180_MS / 2;
+// Back-off time when line is lost before deciding it’s a dead-end
+unsigned long BACK_OFF_MS = 200;     // small reverse to clear the junction
+// Debounce for dead-end detection: require condition to hold this long
+unsigned long DEADEND_HOLD_MS = 120; // prevent false positives
+// Small drive time to re-center after a rotation
+unsigned long NUDGE_FWD_MS = 120;
+
+// =========================
+// Control Variables
+// =========================
+bool motorsEnabled = true;
+
+// =========================
+// Motor Control Helpers
+// =========================
+void enableMotors(){ 
+  digitalWrite(STBY, HIGH); 
+  // Serial.println("Motors ENABLED");
+}
+
+void stopMotors(){
+  analogWrite(PWMA, 0); digitalWrite(AIN1, LOW); digitalWrite(AIN2, LOW);
+  analogWrite(PWMB, 0); digitalWrite(BIN1, LOW); digitalWrite(BIN2, LOW);
+  // Serial.println("Motors STOPPED");
+}
+
+void moveForward(int ls, int rs){
+  if(!motorsEnabled) return;
+  enableMotors();
+  analogWrite(PWMA, ls); digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
+  analogWrite(PWMB, rs); digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
+}
+
+void turnLeftTank(unsigned long ms){ 
+  if(!motorsEnabled) return;
+  enableMotors();
+  // Left wheel backward, Right wheel forward => CCW turn-in-place
+  analogWrite(PWMA, turnSpeed); digitalWrite(AIN1, LOW);  digitalWrite(AIN2, HIGH);
+  analogWrite(PWMB, turnSpeed); digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
+  delay(ms);
+  stopMotors();
+}
+
+void turnRightTank(unsigned long ms){ 
+  if(!motorsEnabled) return;
+  enableMotors();
+  // Left wheel forward, Right wheel backward => CW turn-in-place
+  analogWrite(PWMA, turnSpeed); digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
+  analogWrite(PWMB, turnSpeed); digitalWrite(BIN1, LOW);  digitalWrite(BIN2, HIGH);
+  delay(ms);
+  stopMotors();
+}
+
+void turnLeft(){  // continuous left (used by state machine)
+  if(!motorsEnabled) return;
+  enableMotors();
+  analogWrite(PWMA, 0);  digitalWrite(AIN1, LOW);  digitalWrite(AIN2, LOW);
+  analogWrite(PWMB, turnSpeed); digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
+}
+
+void turnRight(){ // continuous right (used by state machine)
+  if(!motorsEnabled) return;
+  enableMotors();
+  analogWrite(PWMB, 0);  digitalWrite(BIN1, LOW);  digitalWrite(BIN2, LOW);
+  analogWrite(PWMA, turnSpeed); digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);
+}
+
+void moveBack(){ 
+  if(!motorsEnabled) return;
+  enableMotors();
+  analogWrite(PWMA, turnSpeed); digitalWrite(AIN1, LOW);  digitalWrite(AIN2, HIGH);
+  analogWrite(PWMB, turnSpeed); digitalWrite(BIN1, LOW);  digitalWrite(BIN2, HIGH);
+}
+
+void nudgeForward(unsigned long ms){
+  moveForward(fastSpeed, fastSpeed);
+  delay(ms);
+  stopMotors();
+}
+
+// ---- U-Turn/Spin helpers ----
+void turnAround180(){
+  // Choose a direction; CW here. Swap to turnLeftTank if you prefer CCW.
+  turnRightTank(TURN_180_MS);
+}
+
+void turnAround360(){
+  if (TURN_AROUND_DEGREES == 180) {
+    turnAround180();
+  } else {
+    // 360 = two 180s back-to-back for better accuracy
+    turnRightTank(TURN_180_MS);
+    delay(40); // small settle
+    turnRightTank(TURN_180_MS);
+  }
+  // After turning, nudge forward a bit so sensors re-acquire the line
+  nudgeForward(NUDGE_FWD_MS);
+}
+
+// =========================
+// Sensor Reading + Binarization
+// =========================
+void readSensorsNorm(){
+  for(int i=0;i<NUM_SENSORS;i++){
+    int raw = analogRead(SENSOR_PINS[i]);
+    if(sensorMax[i] != sensorMin[i])
+      sensorValues[i] = constrain(map(raw, sensorMin[i], sensorMax[i], 0, 1000), 0, 1000);
+    else
+      sensorValues[i] = constrain(map(raw, 0, 4095, 0, 1000), 0, 1000);
+    sBin[i] = (sensorValues[i] >= binThreshold) ? 1 : 0; // 1 = black, 0 = white
+  }
+}
+
+void printSensorValues(){
+  Serial.print("Sensors: ");
+  for(int i=0;i<NUM_SENSORS;i++){
+    Serial.print(sensorValues[i]);
+    Serial.print("(");
+    Serial.print(sBin[i]);
+    Serial.print(") ");
+  }
+  Serial.println();
+}
+
+bool areAllBlack(){
+  int blackCount = 0;
+  for(int i=0;i<NUM_SENSORS;i++) {
+    if(sensorValues[i] >= 800) blackCount++; // strong black threshold
+  }
+  bool allBlack = (blackCount >= (NUM_SENSORS - 1)); // allow one off
+  if(allBlack) Serial.println("ALL SENSORS BLACK DETECTED");
+  return allBlack;
+}
+
+bool isLineLost(){
+  for(int i=0;i<NUM_SENSORS;i++) if(sBin[i]) return false; // any black?
+  return true;
+}
+
+// =========================
+// Path Optimizer
+// =========================
+void optimizeTail(){
+  if(pIdx < 3) return;
+  char a = path[pIdx-3];
+  char b = path[pIdx-2];
+  char c = path[pIdx-1];
+
+  bool optimized = false;
+  if(a=='L' && c=='R'){ pIdx-=3; path[pIdx++]='B'; optimized=true; }
+  if(!optimized && a=='L' && c=='S'){ pIdx-=3; path[pIdx++]='R'; optimized=true; }
+  if(!optimized && a=='L' && c=='L'){ pIdx-=3; path[pIdx++]='S'; optimized=true; }
+  if(!optimized && a=='S' && c=='L'){ pIdx-=3; path[pIdx++]='R'; optimized=true; }
+  if(!optimized && a=='S' && c=='S'){ pIdx-=3; path[pIdx++]='B'; optimized=true; }
+  if(!optimized && a=='R' && c=='L'){ pIdx-=3; path[pIdx++]='B'; optimized=true; }
+  
+  if(optimized) {
+    Serial.print("Path optimized: ");
+    Serial.print(a); Serial.print(b); Serial.print(c);
+    Serial.print(" -> ");
+    Serial.println(path[pIdx-1]);
+  }
+}
+
+// =========================
+// Decision Helpers (Left-hand-on-wall)
+// =========================
+bool leftAvailable(){    return (sBin[0]||sBin[1]||sBin[2]); }
+bool forwardAvailable(){ return (sBin[3]||sBin[4]); }
+bool rightAvailable(){   return (sBin[5]||sBin[6]||sBin[7]); }
+bool noPathAvailable(){  return (!leftAvailable() && !forwardAvailable() && !rightAvailable()); }
+
+// =========================
+// DRY RUN state machine
+// =========================
+unsigned long goalSeenAt = 0;
+unsigned long deadEndSeenAt = 0;
+unsigned long lineLostAt = 0;
+
+void doDeadEndAction(){
+  // Record and execute spin/U-turn
+  if(pIdx==0 || path[pIdx-1] != 'B'){ 
+    path[pIdx++]='B'; 
+    optimizeTail();
+    Serial.println("Decision: DEAD END -> TURN");
+  }
+  stopMotors();
+  // Small back-off to clear the end cap before spinning (prevents scraping)
+  moveBack();
+  delay(BACK_OFF_MS);
+  stopMotors();
+
+  // Perform requested turn (360 or 180 via constant)
+  turnAround360();
+}
+
+void dryRunStep(){
+  readSensorsNorm();
+
+  // Debug: print sensor values every 2 seconds
+  static unsigned long lastSensorPrint = 0;
+  if(millis() - lastSensorPrint > 2000){
+    printSensorValues();
+    Serial.println("Paths: L=" + String(leftAvailable()) + " F=" + String(forwardAvailable()) + " R=" + String(rightAvailable()));
+    lastSensorPrint = millis();
+  }
+
+  // ---- Goal detection (all black for a sustained time) ----
+  if(areAllBlack()){
+    if(goalSeenAt==0) {
+      goalSeenAt = millis();
+      Serial.println("GOAL DETECTED - Starting timer");
+    }
+    if(millis() - goalSeenAt >= goalHoldMs){
+      stopMotors();
+      mode = IDLE;
+      Serial.println("Dry Run COMPLETED. Path length: " + String(pIdx));
+      Serial.print("Recorded path: ");
+      for(int i = 0; i < pIdx; i++) Serial.print(path[i]);
+      Serial.println();
+      return;
+    }
+  } else {
+    if(goalSeenAt != 0) Serial.println("Goal lost - resetting timer");
+    goalSeenAt = 0;
+  }
+
+  // ---- Dead-end detection (no left/forward/right) with debounce ----
+  if(noPathAvailable()){
+    if(deadEndSeenAt == 0) {
+      deadEndSeenAt = millis();
+    }
+    if(millis() - deadEndSeenAt >= DEADEND_HOLD_MS){
+      doDeadEndAction();
+      deadEndSeenAt = 0;
+    }
+    return; // we're handling the dead-end this cycle
+  } else {
+    deadEndSeenAt = 0;
+  }
+
+  // ---- Line lost handling (all white) -> gentle back-off, then consider dead-end ----
+  if(isLineLost()){
+    if(lineLostAt == 0){
+      lineLostAt = millis();
+      Serial.println("LINE LOST - attempting recovery");
+    }
+    // Back off a bit and re-check (helps when we overshoot a T or end)
+    moveBack();
+    delay(BACK_OFF_MS);
+    stopMotors();
+    readSensorsNorm();
+
+    if(noPathAvailable()){
+      // If still nothing, treat as dead-end
+      doDeadEndAction();
+      lineLostAt = 0;
+      return;
+    } else {
+      // If we re-acquired, continue to decisions below
+      lineLostAt = 0;
+    }
+  }
+
+  // ---- Left-hand-on-wall priority: Left -> Straight -> Right ----
+  if(leftAvailable()){
+    if(pIdx==0 || path[pIdx-1] != 'L'){ 
+      path[pIdx++]='L'; 
+      optimizeTail(); 
+      Serial.println("Decision: LEFT");
+    }
+    turnLeft();
+  }
+  else if(forwardAvailable()){
+    if(pIdx==0 || path[pIdx-1] != 'S'){ 
+      path[pIdx++]='S'; 
+      optimizeTail(); 
+      Serial.println("Decision: FORWARD");
+    }
+    moveForward(fwdSpeed, fwdSpeed);
+  }
+  else if(rightAvailable()){
+    if(pIdx==0 || path[pIdx-1] != 'R'){ 
+      path[pIdx++]='R'; 
+      optimizeTail(); 
+      Serial.println("Decision: RIGHT");
+    }
+    turnRight();
+  }
+
+  // small loop delay for stability
+  // (note: main loop has 5ms too)
+}
+
+// =========================
+// FAST RUN (replay shortest path)
+// =========================
+int rIdx = 0;
+unsigned long stepStart=0;
+unsigned long stepDur = 180;
+
+void beginReplay(){
+  for(int k=0;k<pIdx;k++) pathTmp[k]=path[k];
+  pathTmp[pIdx]='\0';
+  rIdx = 0; stepStart = 0;
+  Serial.print("Starting replay of path: ");
+  Serial.println(pathTmp);
+}
+
+bool replayStep(){
+  if(pathTmp[rIdx]=='\0'){
+    stopMotors();
+    Serial.println("Fast Run completed");
+    return true;
+  }
+  
+  if(stepStart==0){ 
+    stepStart = millis(); 
+    Serial.println(String("Executing step ") + rIdx + ": " + pathTmp[rIdx]);
+  }
+
+  char cmd = pathTmp[rIdx];
+  switch(cmd){
+    case 'L': turnLeft(); break;
+    case 'R': turnRight(); break;
+    case 'S': moveForward(fastSpeed, fastSpeed); break;
+    case 'B': 
+      // During replay, do a clean turn-around rather than raw back
+      stopMotors();
+      turnAround180();         // For replay, 180° makes sense
+      break;
+  }
+
+  if(millis() - stepStart >= stepDur){
+    moveForward(fastSpeed, fastSpeed);
+    delay(10);
+    stepStart = 0;
+    rIdx++;
+  }
+  return false;
+}
+
+// =========================
+// Calibration
+// =========================
+void calibrateSensors(int duration_ms){
+  Serial.println("Starting calibration for " + String(duration_ms) + "ms");
+  Serial.println("Move the robot over white and black surfaces...");
+  
+  for(int i=0;i<NUM_SENSORS;i++){ sensorMin[i]=4095; sensorMax[i]=0; }
+  unsigned long start = millis();
+  unsigned long lastPrint = 0;
+  
+  while(millis() - start < (unsigned long)duration_ms){
+    for(int i=0;i<NUM_SENSORS;i++){
+      int raw = analogRead(SENSOR_PINS[i]);
+      if(raw < sensorMin[i]) sensorMin[i] = raw;
+      if(raw > sensorMax[i]) sensorMax[i] = raw;
+    }
+    if(millis() - lastPrint >= 1000){
+      Serial.print("Calibrating... ");
+      Serial.print((millis() - start) / 1000);
+      Serial.println("s");
+      lastPrint = millis();
+    }
+    delay(10);
+  }
+  
+  Serial.println("Calibration complete:");
+  for(int i=0;i<NUM_SENSORS;i++){
+    Serial.println("Sensor " + String(i) + ": " + String(sensorMin[i]) + " - " + String(sensorMax[i]));
+  }
+}
+
+// =========================
+// Serial Command Processing
+// =========================
+void processSerialCommand(){
+  if(Serial.available()){
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    command.toLowerCase();
+    
+    if(command == "help" || command == "h"){
+      Serial.println("\n=== ESP32 Maze Solver Commands ===");
+      Serial.println("cal        - Calibrate sensors (5 seconds)");
+      Serial.println("dry        - Start dry run (records path)");
+      Serial.println("fast       - Start fast run (replays path)");
+      Serial.println("stop       - Stop all operations");
+      Serial.println("motor      - Toggle motors on/off");
+      Serial.println("sensors    - Show current sensor readings");
+      Serial.println("path       - Show recorded path");
+      Serial.println("set180     - Set dead-end turn to 180 degrees");
+      Serial.println("set360     - Set dead-end turn to 360 degrees");
+      Serial.println("set180ms X - Set 180° turn time to X ms (tuning)");
+      Serial.println("test [f/l/r/b] - Test motors (forward/left/right/back)");
+      Serial.println("===================================\n");
+    }
+    else if(command == "cal"){
+      Serial.println("Starting calibration...");
+      calibrateSensors(5000);
+    }
+    else if(command == "dry"){
+      if(!motorsEnabled){ 
+        Serial.println("Enable motors first with 'motor' command"); 
+        return; 
+      }
+      pIdx = 0; goalSeenAt = 0; mode = DRYRUN;
+      Serial.println("=== DRY RUN STARTED ===");
+    }
+    else if(command == "fast"){
+      if(pIdx==0){ 
+        Serial.println("No path recorded yet. Do a dry run first."); 
+        return; 
+      }
+      beginReplay(); mode = FASTRUN;
+      Serial.println("=== FAST RUN STARTED ===");
+    }
+    else if(command == "stop"){
+      mode = IDLE; stopMotors();
+      Serial.println("=== STOPPED ===");
+    }
+    else if(command == "motor"){
+      motorsEnabled = !motorsEnabled;
+      if(!motorsEnabled) {
+        stopMotors();
+        digitalWrite(STBY, LOW);
+      } else {
+        digitalWrite(STBY, HIGH);
+      }
+      Serial.println(String("Motors ") + (motorsEnabled ? "ENABLED" : "DISABLED"));
+    }
+    else if(command == "sensors"){
+      readSensorsNorm();
+      printSensorValues();
+    }
+    else if(command == "path"){
+      Serial.print("Current path (" + String(pIdx) + " moves): ");
+      for(int i = 0; i < pIdx; i++){
+        Serial.print(path[i]);
+      }
+      Serial.println();
+    }
+    else if(command.startsWith("test ")){
+      if(!motorsEnabled){
+        Serial.println("Enable motors first");
+        return;
+      }
+      char testCmd = command.charAt(5);
+      switch(testCmd){
+        case 'f': moveForward(100, 100); delay(1000); stopMotors(); Serial.println("Forward test done"); break;
+        case 'l': turnLeftTank(TURN_90_MS); Serial.println("Left 90 test done"); break;
+        case 'r': turnRightTank(TURN_90_MS); Serial.println("Right 90 test done"); break;
+        case 'b': moveBack(); delay(800); stopMotors(); Serial.println("Back test done"); break;
+        default: Serial.println("Use: test f/l/r/b (forward/left/right/back)"); break;
+      }
+    }
+    else if(command.startsWith("set180ms ")){
+      long val = command.substring(9).toInt();
+      if(val > 100 && val < 3000){
+        TURN_180_MS = (unsigned long)val;
+        Serial.print("TURN_180_MS set to ");
+        Serial.print(TURN_180_MS);
+        Serial.println(" ms");
+      } else {
+        Serial.println("Enter a value between 100 and 3000");
+      }
+    }
+    else if(command == "set180"){
+      // Note: we can’t change a const at runtime; emulate by using 180 logic
+      // User can still call set360 to go back (handled by turnAround360 check)
+      // Here we just inform: use 180 at dead-ends by changing constant & re-upload
+      Serial.println("For permanent 180° at dead-ends, set TURN_AROUND_DEGREES to 180 and re-upload.");
+    }
+    else if(command == "set360"){
+      Serial.println("For permanent 360° at dead-ends, set TURN_AROUND_DEGREES to 360 and re-upload.");
+    }
+    else if(command != ""){
+      Serial.println("Unknown command: " + command);
+      Serial.println("Type 'help' for available commands");
+    }
+  }
+}
+
+// =========================
+// Setup & Loop
+// =========================
+void setup(){
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n=== ESP32 MAZE SOLVER - STANDALONE (Updated) ===");
+  Serial.println("Type 'help' for available commands");
+
+  // Motor pins
+  pinMode(AIN1, OUTPUT); pinMode(AIN2, OUTPUT);
+  pinMode(BIN1, OUTPUT); pinMode(BIN2, OUTPUT);
+  pinMode(STBY, OUTPUT);
+  pinMode(PWMA, OUTPUT); pinMode(PWMB, OUTPUT);
+  Serial.println("Motor pins configured");
+
+  // Sensor pins
+  for(int i=0;i<NUM_SENSORS;i++) pinMode(SENSOR_PINS[i], INPUT);
+  Serial.println("Sensor pins configured");
+
+  digitalWrite(STBY, HIGH);
+  stopMotors();
+
+  // Auto-calibrate on startup
+  Serial.println("Starting auto-calibration...");
+  calibrateSensors(5000);
+  
+  Serial.println("=== SETUP COMPLETE ===");
+  Serial.println("Ready for commands. Type 'help' for options.");
+}
+
+void loop(){
+  // Process serial commands
+  processSerialCommand();
+
+  if(!motorsEnabled){ 
+    if(mode != IDLE) {
+      mode = IDLE;
+      stopMotors();
+    }
+    delay(50);
+    return; 
+  }
+
+  // Run maze solving modes
+  if(mode == DRYRUN){
+    dryRunStep();
+  }
+  else if(mode == FASTRUN){
+    bool done = replayStep();
+    if(done){ 
+      mode = IDLE; 
+      Serial.println("Fast Run finished"); 
+    }
+  }
+
+  delay(5);
+}
